@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "Booking": {
+      "title": "Booking",
+      "description": "Guest reservation records at Moshi Urban Hostel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "guestName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "guestId": { "type": "string", "maxLength": 64 },
+        "email": { "type": "string", "format": "email", "maxLength": 120 },
+        "phone": { "type": "string", "minLength": 5, "maxLength": 30 },
+        "roomId": { "type": "string", "maxLength": 32 },
+        "roomName": { "type": "string", "maxLength": 100 },
+        "roomCode": { "type": "string", "maxLength": 32 },
+        "checkIn": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "checkOut": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "nights": { "type": "number" },
+        "guestsCount": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": ["Confirmed", "Checked-in", "Checked-out", "Tentative", "Cancelled", "No-show", "Refunded"]
+        },
+        "platform": { "type": "string", "maxLength": 50 },
+        "stayTotalTZS": { "type": "number" },
+        "stayTotalUSD": { "type": "number" },
+        "depositPaidTZS": { "type": "number" },
+        "balanceDueTZS": { "type": "number" },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["front_desk", "mpesa", "mobile_money", "card"]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Paid in Full", "Deposit Paid", "Pay at Check-in"]
+        },
+        "specialRequests": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["guestName", "roomId", "checkIn", "checkOut", "status", "stayTotalTZS"]
+    },
+    "Room": {
+      "title": "Room",
+      "description": "Room inventory and bed layout configurations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "roomCode": { "type": "string", "maxLength": 32 },
+        "type": {
+          "type": "string",
+          "enum": ["dorm", "family", "triple", "private"]
+        },
+        "totalBeds": { "type": "number" },
+        "singleBeds": { "type": "number" },
+        "bunkBeds": { "type": "number" },
+        "pricePerNightTZS": { "type": "number" },
+        "pricePerNightUSD": { "type": "number" },
+        "priceUnit": { "type": "string", "maxLength": 50 },
+        "bathroom": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "bedConfiguration": { "type": "string", "maxLength": 100 },
+        "tagline": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["name", "roomCode", "type", "totalBeds", "pricePerNightTZS"]
+    },
+    "HostelSetting": {
+      "title": "HostelSetting",
+      "description": "Hostel operational settings such as exchange rates and default base pricing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "basePricePerNightTZS": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["updatedAt"]
+    },
+    "TestConnection": {
+      "title": "TestConnection",
+      "description": "Heartbeat document to verify Firestore reachability",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "maxLength": 20 }
+      }
+    }
+  },
+  "firestore": {
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Reservations collection tracking guest stays and bed commitments"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Hostel room inventory and bed allocations"
+    },
+    "/settings/{settingId}": {
+      "schema": "HostelSetting",
+      "description": "System-wide hostel operational configurations"
+    },
+    "/test/{connectionId}": {
+      "schema": "TestConnection",
+      "description": "Test collection for connectivity verification"
+    }
+  }
+}

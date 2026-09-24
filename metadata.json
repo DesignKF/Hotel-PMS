@@ -1,0 +1,6 @@
+{
+  "name": "Moshi Urban Hostel & Booking",
+  "description": "Direct and seamless hotel & hostel booking in Moshi, Kilimanjaro. Instant reservation, real-time room availability, and operational management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

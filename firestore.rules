@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default-deny global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Security Helper Functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'wolfgodie@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation helper for Room documents
+    function isValidRoom(data) {
+      return data.keys().hasAll(['name', 'roomCode', 'type', 'totalBeds', 'pricePerNightTZS']) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.roomCode is string && data.roomCode.size() <= 32 &&
+        data.type in ['dorm', 'family', 'triple', 'private'] &&
+        data.totalBeds is number && data.totalBeds > 0 && data.totalBeds <= 50 &&
+        data.pricePerNightTZS is number && data.pricePerNightTZS >= 0 &&
+        (!('pricePerNightUSD' in data) || data.pricePerNightUSD is number) &&
+        (!('singleBeds' in data) || (data.singleBeds is number && data.singleBeds >= 0)) &&
+        (!('bunkBeds' in data) || (data.bunkBeds is number && data.bunkBeds >= 0)) &&
+        (!('bathroom' in data) || (data.bathroom is string && data.bathroom.size() <= 100)) &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 100));
+    }
+
+    // Validation helper for Booking documents
+    function isValidBooking(data) {
+      return data.keys().hasAll(['guestName', 'roomId', 'checkIn', 'checkOut', 'status', 'stayTotalTZS']) &&
+        data.guestName is string && data.guestName.size() >= 2 && data.guestName.size() <= 100 &&
+        data.roomId is string && data.roomId.size() <= 64 &&
+        data.checkIn is string && data.checkIn.size() == 10 && data.checkIn.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.checkOut is string && data.checkOut.size() == 10 && data.checkOut.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.status in ['Confirmed', 'Checked-in', 'Checked-out', 'Tentative', 'Cancelled', 'No-show', 'Refunded'] &&
+        data.stayTotalTZS is number && data.stayTotalTZS >= 0 &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+        (!('nights' in data) || (data.nights is number && data.nights > 0)) &&
+        (!('guestsCount' in data) || (data.guestsCount is number && data.guestsCount > 0)) &&
+        (!('stayTotalUSD' in data) || data.stayTotalUSD is number) &&
+        (!('depositPaidTZS' in data) || data.depositPaidTZS is number) &&
+        (!('balanceDueTZS' in data) || data.balanceDueTZS is number) &&
+        (!('paymentMethod' in data) || data.paymentMethod in ['front_desk', 'mpesa', 'mobile_money', 'card']) &&
+        (!('paymentStatus' in data) || data.paymentStatus in ['Paid in Full', 'Deposit Paid', 'Pay at Check-in']) &&
+        (!('specialRequests' in data) || (data.specialRequests is string && data.specialRequests.size() <= 500));
+    }
+
+    // Validation helper for Hostel Settings documents
+    function isValidSetting(data) {
+      return data.keys().hasAll(['updatedAt']) &&
+        data.updatedAt is string && data.updatedAt.size() <= 50 &&
+        (!('basePricePerNightTZS' in data) || (data.basePricePerNightTZS is number && data.basePricePerNightTZS >= 0)) &&
+        (!('currency' in data) || (data.currency is string && data.currency.size() <= 10));
+    }
+
+    // Connectivity test document
+    match /test/{connectionId} {
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admins registry
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Rooms & bed configurations
+    match /rooms/{roomId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming());
+      allow update: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming());
+      allow delete: if isAdmin() && isValidId(roomId);
+    }
+
+    // Bookings collection
+    match /bookings/{bookingId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(bookingId) && isValidBooking(incoming());
+      allow update: if isSignedIn() && isValidId(bookingId) && isValidBooking(incoming());
+      allow delete: if isAdmin() && isValidId(bookingId);
+    }
+
+    // Settings collection
+    match /settings/{settingId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin() && isValidId(settingId) && isValidSetting(incoming());
+    }
+  }
+}
