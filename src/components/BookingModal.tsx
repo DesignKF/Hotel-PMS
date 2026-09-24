@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useBooking } from '../context/BookingContext';
-import { PaymentMethod, Room } from '../types';
+import { PaymentMethod, Room, BookingStatus } from '../types';
 import { 
   X, 
   Bed, 
   Phone,
   User,
   Mail,
-  Plus
+  Plus,
+  CheckCircle,
+  Clock,
+  LogIn
 } from 'lucide-react';
 import { formatMoney, formatDateDisplay } from '../utils/formatters';
 
@@ -36,6 +39,7 @@ export const BookingModal: React.FC = () => {
   const [checkIn, setCheckIn] = useState<string>(defaultCheckIn);
   const [checkOut, setCheckOut] = useState<string>(defaultCheckOut);
   const [guestsCount, setGuestsCount] = useState<number>(1);
+  const [status, setStatus] = useState<BookingStatus>('Confirmed');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('mobile_money');
   const [isDepositOnly, setIsDepositOnly] = useState<boolean>(false);
   const [specialRequests, setSpecialRequests] = useState<string>('');
@@ -98,6 +102,7 @@ export const BookingModal: React.FC = () => {
         checkOut,
         guestsCount: effectiveBeds,
         paymentMethod,
+        status,
         specialRequests,
         isDepositOnly,
         syncToGoogleCal
@@ -257,6 +262,73 @@ export const BookingModal: React.FC = () => {
               <span className="text-[12px] text-tertiary block">
                 {formatDateDisplay(checkOut)}
               </span>
+            </div>
+          </div>
+
+          {/* Booking Status Toggle */}
+          <div className="p-3.5 bg-surface-2 rounded-xl border border-subtle space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                <span>Reservation Status *</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-3 text-secondary font-medium">
+                  {status}
+                </span>
+              </label>
+              <span className="text-[11px] text-tertiary hidden sm:inline">
+                {status === 'Confirmed' && 'Bed confirmed for guest'}
+                {status === 'Tentative' && 'Bed on hold / provisional inquiry'}
+                {status === 'Checked-in' && 'Guest on-site & checked in'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setStatus('Confirmed')}
+                className={`p-2.5 rounded-lg text-xs font-semibold cursor-pointer border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                  status === 'Confirmed'
+                    ? 'bg-[var(--status-success-bg)] text-[var(--status-success-text)] border-[var(--status-success-border)] shadow-xs font-bold ring-1 ring-[var(--status-success-border)]'
+                    : 'bg-surface-1 text-secondary border-subtle hover:text-primary hover:bg-surface-3'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle className={`w-3.5 h-3.5 ${status === 'Confirmed' ? 'text-[var(--status-success-text)]' : 'text-tertiary'}`} />
+                  <span>Confirmed</span>
+                </div>
+                <span className="text-[10px] opacity-75 font-normal">Standard booking</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatus('Tentative')}
+                className={`p-2.5 rounded-lg text-xs font-semibold cursor-pointer border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                  status === 'Tentative'
+                    ? 'bg-[var(--status-warning-bg)] text-[var(--status-warning-text)] border-[var(--status-warning-border)] shadow-xs font-bold ring-1 ring-[var(--status-warning-border)]'
+                    : 'bg-surface-1 text-secondary border-subtle hover:text-primary hover:bg-surface-3'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Clock className={`w-3.5 h-3.5 ${status === 'Tentative' ? 'text-[var(--status-warning-text)]' : 'text-tertiary'}`} />
+                  <span>Tentative</span>
+                </div>
+                <span className="text-[10px] opacity-75 font-normal">Provisional hold</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatus('Checked-in')}
+                className={`p-2.5 rounded-lg text-xs font-semibold cursor-pointer border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                  status === 'Checked-in'
+                    ? 'bg-[var(--status-info-bg)] text-[var(--status-info-text)] border-[var(--status-info-border)] shadow-xs font-bold ring-1 ring-[var(--status-info-border)]'
+                    : 'bg-surface-1 text-secondary border-subtle hover:text-primary hover:bg-surface-3'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <LogIn className={`w-3.5 h-3.5 ${status === 'Checked-in' ? 'text-[var(--status-info-text)]' : 'text-tertiary'}`} />
+                  <span>Checked-in</span>
+                </div>
+                <span className="text-[10px] opacity-75 font-normal">Guest arrived</span>
+              </button>
             </div>
           </div>
 

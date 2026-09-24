@@ -5,9 +5,10 @@ import {
   deleteDoc, 
   onSnapshot, 
   query, 
-  getDocs 
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { db } from './firebase';
 import { handleFirestoreError, OperationType } from './firebaseError';
 import { Booking, Room, ExchangeRates } from '../types';
 
@@ -16,9 +17,6 @@ const ROOMS_PATH = 'rooms';
 const SETTINGS_PATH = 'settings';
 
 export async function saveBookingToFirestore(booking: Booking): Promise<void> {
-  if (!auth.currentUser) {
-    return;
-  }
   const path = `${BOOKINGS_PATH}/${booking.id}`;
   try {
     const data: Record<string, unknown> = {
@@ -51,18 +49,17 @@ export async function saveBookingToFirestore(booking: Booking): Promise<void> {
     await setDoc(doc(db, BOOKINGS_PATH, booking.id), data, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
 export async function deleteBookingFromFirestore(bookingId: string): Promise<void> {
-  if (!auth.currentUser) {
-    return;
-  }
   const path = `${BOOKINGS_PATH}/${bookingId}`;
   try {
     await deleteDoc(doc(db, BOOKINGS_PATH, bookingId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
   }
 }
 
@@ -70,9 +67,6 @@ export function subscribeToBookings(
   onData: (bookings: Booking[]) => void,
   onError?: (error: unknown) => void
 ) {
-  if (!auth.currentUser) {
-    return () => {};
-  }
   const q = query(collection(db, BOOKINGS_PATH));
   return onSnapshot(
     q,
@@ -90,10 +84,61 @@ export function subscribeToBookings(
   );
 }
 
-export async function saveRoomToFirestore(room: Room): Promise<void> {
-  if (!auth.currentUser) {
-    return;
+export async function fetchAllBookingsFromFirestore(): Promise<Booking[]> {
+  try {
+    const snap = await getDocs(collection(db, BOOKINGS_PATH));
+    const items: Booking[] = [];
+    snap.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...(docSnap.data() as Omit<Booking, 'id'>) });
+    });
+    return items;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, BOOKINGS_PATH);
+    throw error;
   }
+}
+
+export async function syncAllBookingsToFirestore(bookings: Booking[]): Promise<void> {
+  if (!bookings || bookings.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    for (const booking of bookings) {
+      const docRef = doc(db, BOOKINGS_PATH, booking.id);
+      const data: Record<string, unknown> = {
+        guestName: booking.guestName,
+        roomId: booking.roomId,
+        checkIn: booking.checkIn,
+        checkOut: booking.checkOut,
+        status: booking.status,
+        stayTotalTZS: Number(booking.stayTotalTZS) || 0,
+        updatedAt: new Date().toISOString()
+      };
+      if (booking.id) data.id = booking.id;
+      if (booking.guestId) data.guestId = booking.guestId;
+      if (booking.email) data.email = booking.email;
+      if (booking.phone) data.phone = booking.phone;
+      if (booking.roomName) data.roomName = booking.roomName;
+      if (booking.roomCode) data.roomCode = booking.roomCode;
+      if (booking.nights) data.nights = Number(booking.nights);
+      if (booking.guestsCount) data.guestsCount = Number(booking.guestsCount);
+      if (booking.platform) data.platform = booking.platform;
+      if (booking.stayTotalUSD !== undefined) data.stayTotalUSD = Number(booking.stayTotalUSD);
+      if (booking.depositPaidTZS !== undefined) data.depositPaidTZS = Number(booking.depositPaidTZS);
+      if (booking.balanceDueTZS !== undefined) data.balanceDueTZS = Number(booking.balanceDueTZS);
+      if (booking.paymentMethod) data.paymentMethod = booking.paymentMethod;
+      if (booking.paymentStatus) data.paymentStatus = booking.paymentStatus;
+      if (booking.specialRequests) data.specialRequests = booking.specialRequests.slice(0, 500);
+      if (booking.createdAt) data.createdAt = booking.createdAt;
+      batch.set(docRef, data, { merge: true });
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, BOOKINGS_PATH);
+    throw error;
+  }
+}
+
+export async function saveRoomToFirestore(room: Room): Promise<void> {
   const path = `${ROOMS_PATH}/${room.id}`;
   try {
     const data: Record<string, unknown> = {
@@ -115,6 +160,50 @@ export async function saveRoomToFirestore(room: Room): Promise<void> {
     await setDoc(doc(db, ROOMS_PATH, room.id), data, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
+  }
+}
+
+export async function fetchAllRoomsFromFirestore(): Promise<Room[]> {
+  try {
+    const snap = await getDocs(collection(db, ROOMS_PATH));
+    const items: Room[] = [];
+    snap.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...(docSnap.data() as Omit<Room, 'id'>) });
+    });
+    return items;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, ROOMS_PATH);
+    throw error;
+  }
+}
+
+export async function syncAllRoomsToFirestore(rooms: Room[]): Promise<void> {
+  if (!rooms || rooms.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    for (const room of rooms) {
+      const docRef = doc(db, ROOMS_PATH, room.id);
+      const data: Record<string, unknown> = {
+        name: room.name,
+        roomCode: room.roomCode,
+        type: room.type,
+        totalBeds: Number(room.totalBeds) || 1,
+        pricePerNightTZS: Number(room.pricePerNightTZS) || 0
+      };
+      if (room.id) data.id = room.id;
+      if (room.pricePerNightUSD !== undefined) data.pricePerNightUSD = Number(room.pricePerNightUSD);
+      if (room.singleBeds !== undefined) data.singleBeds = Number(room.singleBeds);
+      if (room.bunkBeds !== undefined) data.bunkBeds = Number(room.bunkBeds);
+      if (room.bathroom) data.bathroom = room.bathroom.slice(0, 100);
+      if (room.description) data.description = room.description.slice(0, 500);
+      if (room.tagline) data.tagline = room.tagline.slice(0, 100);
+      batch.set(docRef, data, { merge: true });
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, ROOMS_PATH);
+    throw error;
   }
 }
 
@@ -140,9 +229,6 @@ export function subscribeToRooms(
 }
 
 export async function saveSettingsToFirestore(rates: ExchangeRates, basePriceTZS: number): Promise<void> {
-  if (!auth.currentUser) {
-    return;
-  }
   const path = `${SETTINGS_PATH}/general`;
   try {
     await setDoc(
@@ -157,5 +243,6 @@ export async function saveSettingsToFirestore(rates: ExchangeRates, basePriceTZS
     );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }

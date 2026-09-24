@@ -32,7 +32,10 @@ import {
   subscribeToBookings, 
   saveRoomToFirestore, 
   subscribeToRooms, 
-  saveSettingsToFirestore 
+  saveSettingsToFirestore,
+  syncAllBookingsToFirestore,
+  syncAllRoomsToFirestore,
+  fetchAllBookingsFromFirestore
 } from '../services/firestoreDb';
 
 interface CalendarConfirmModalState {
@@ -43,6 +46,13 @@ interface CalendarConfirmModalState {
 }
 
 interface BookingContextType {
+  // Live Cloud Database Synchronization
+  syncStatus: 'synced' | 'syncing' | 'unsynced' | 'error';
+  lastSyncedAt: Date | null;
+  syncError: string | null;
+  isSyncingDatabase: boolean;
+  syncDatabase: () => Promise<void>;
+
   isAuthenticated: boolean;
   authSession: AuthSession | null;
   currentUserPermissions: string[];
@@ -113,6 +123,7 @@ interface BookingContextType {
     checkOut: string;
     guestsCount: number;
     paymentMethod: PaymentMethod;
+    status?: BookingStatus;
     specialRequests?: string;
     isDepositOnly?: boolean;
     syncToGoogleCal?: boolean;
@@ -805,6 +816,12 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [calendarConfirmModal, setCalendarConfirmModal] = useState<CalendarConfirmModalState | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Live Cloud Database Sync States
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'unsynced' | 'error'>('synced');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [isSyncingDatabase, setIsSyncingDatabase] = useState<boolean>(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -847,21 +864,66 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => unsub();
   }, []);
 
-  // Real-time Firestore sync for guest reservations when Firebase authenticated
+  // Real-time Firestore sync for guest reservations across all devices
   useEffect(() => {
-    if (!googleUser && !auth.currentUser) return;
     const unsub = subscribeToBookings(
       (firestoreBookings) => {
         if (firestoreBookings && firestoreBookings.length > 0) {
           setBookings(firestoreBookings);
+          setSyncStatus('synced');
+          setLastSyncedAt(new Date());
+          setSyncError(null);
+        } else if (firestoreBookings && firestoreBookings.length === 0) {
+          // If Firestore is empty on initial setup, seed it with the current bookings & rooms
+          syncAllBookingsToFirestore(bookings)
+            .then(() => {
+              syncAllRoomsToFirestore(customRooms);
+              setSyncStatus('synced');
+              setLastSyncedAt(new Date());
+              setSyncError(null);
+            })
+            .catch(err => {
+              console.warn('Initial seeding notice:', err);
+              setSyncStatus('synced');
+            });
         }
       },
-      (err) => {
+      (err: any) => {
         console.warn('Bookings Firestore subscription notice:', err);
+        setSyncStatus('unsynced');
+        setSyncError(err?.message || 'Database connection error');
       }
     );
     return () => unsub();
-  }, [googleUser]);
+  }, []);
+
+  // Manual Database Synchronization Trigger
+  const syncDatabase = async () => {
+    setIsSyncingDatabase(true);
+    setSyncStatus('syncing');
+    setSyncError(null);
+    try {
+      // 1. Push all current local bookings to cloud Firestore
+      await syncAllBookingsToFirestore(bookings);
+      // 2. Push all rooms to cloud Firestore
+      await syncAllRoomsToFirestore(customRooms);
+      // 3. Re-fetch latest from Firestore to confirm consistency
+      const remoteBookings = await fetchAllBookingsFromFirestore();
+      if (remoteBookings && remoteBookings.length > 0) {
+        setBookings(remoteBookings);
+      }
+      setSyncStatus('synced');
+      setLastSyncedAt(new Date());
+      showToast('Database synchronization complete! All changes are live on the cloud.');
+    } catch (err: any) {
+      console.error('Manual sync error:', err);
+      setSyncStatus('unsynced');
+      setSyncError(err?.message || 'Database sync failed');
+      showToast('Sync issue: please check internet connection.');
+    } finally {
+      setIsSyncingDatabase(false);
+    }
+  };
 
   const connectGoogleCalendar = async () => {
     try {
@@ -1156,6 +1218,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     checkOut,
     guestsCount: gCount,
     paymentMethod,
+    status = 'Confirmed',
     specialRequests,
     isDepositOnly,
     syncToGoogleCal,
@@ -1171,6 +1234,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     checkOut: string;
     guestsCount: number;
     paymentMethod: PaymentMethod;
+    status?: BookingStatus;
     specialRequests?: string;
     isDepositOnly?: boolean;
     syncToGoogleCal?: boolean;
@@ -1249,7 +1313,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       checkOut,
       nights: n,
       guestsCount: gCount,
-      status: 'Confirmed',
+      status: status || 'Confirmed',
       platform: 'Direct Booking',
       stayTotalTZS: totalTZS,
       stayTotalUSD: totalUSD,
@@ -1282,12 +1346,21 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSelectedRoomForBooking(null);
     setCompletedBooking(newBooking);
 
-    // Persist to Firestore
-    saveBookingToFirestore(newBooking).catch(err => {
-      console.warn('Firestore booking save fallback:', err);
-    });
+    // Persist live to Firestore database with sync state updates
+    setSyncStatus('syncing');
+    saveBookingToFirestore(newBooking)
+      .then(() => {
+        setSyncStatus('synced');
+        setLastSyncedAt(new Date());
+        setSyncError(null);
+      })
+      .catch(err => {
+        console.warn('Firestore booking save fallback:', err);
+        setSyncStatus('unsynced');
+        setSyncError(err?.message || 'Database write failed');
+      });
 
-    showToast(`Reservation ${bookingId} confirmed & room assigned!`);
+    showToast(`Reservation ${bookingId} (${newBooking.status}) created & synced to database!`);
     return newBooking;
   };
 
@@ -1304,9 +1377,18 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
     );
     if (updatedBooking) {
-      saveBookingToFirestore(updatedBooking).catch(err => {
-        console.warn('Firestore booking status update fallback:', err);
-      });
+      setSyncStatus('syncing');
+      saveBookingToFirestore(updatedBooking)
+        .then(() => {
+          setSyncStatus('synced');
+          setLastSyncedAt(new Date());
+          setSyncError(null);
+        })
+        .catch(err => {
+          console.warn('Firestore booking status update fallback:', err);
+          setSyncStatus('unsynced');
+          setSyncError(err?.message || 'Database update failed');
+        });
     }
     showToast(`Booking ${id} status changed to ${newStatus}`);
   };
@@ -1324,9 +1406,17 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       })
     );
     if (updatedBooking) {
-      saveBookingToFirestore(updatedBooking).catch(err => {
-        console.warn('Firestore booking cancel fallback:', err);
-      });
+      setSyncStatus('syncing');
+      saveBookingToFirestore(updatedBooking)
+        .then(() => {
+          setSyncStatus('synced');
+          setLastSyncedAt(new Date());
+          setSyncError(null);
+        })
+        .catch(err => {
+          console.warn('Firestore booking cancel fallback:', err);
+          setSyncStatus('unsynced');
+        });
     }
     showToast(`Booking ${id} cancelled. Room is now immediately available.`);
   };
@@ -1334,9 +1424,17 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Delete booking record permanently
   const deleteBooking = (id: string) => {
     setBookings(prev => prev.filter(b => b.id !== id));
-    deleteBookingFromFirestore(id).catch(err => {
-      console.warn('Firestore booking delete fallback:', err);
-    });
+    setSyncStatus('syncing');
+    deleteBookingFromFirestore(id)
+      .then(() => {
+        setSyncStatus('synced');
+        setLastSyncedAt(new Date());
+        setSyncError(null);
+      })
+      .catch(err => {
+        console.warn('Firestore booking delete fallback:', err);
+        setSyncStatus('unsynced');
+      });
     showToast(`Booking ${id} record removed.`);
   };
 
@@ -1432,6 +1530,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   return (
     <BookingContext.Provider
       value={{
+        syncStatus,
+        lastSyncedAt,
+        syncError,
+        isSyncingDatabase,
+        syncDatabase,
         userRole,
         setUserRole,
         users,

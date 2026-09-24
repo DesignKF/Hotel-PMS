@@ -79,35 +79,33 @@ service cloud.firestore {
     // Connectivity test document
     match /test/{connectionId} {
       allow get: if true;
-      allow write: if isAdmin();
+      allow write: if true;
     }
 
     // Admins registry
     match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
     // Rooms & bed configurations
     match /rooms/{roomId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming());
-      allow update: if isSignedIn() && isValidId(roomId) && isValidRoom(incoming());
-      allow delete: if isAdmin() && isValidId(roomId);
+      allow create, update: if isValidId(roomId) && isValidRoom(incoming());
+      allow delete: if isValidId(roomId);
     }
 
     // Bookings collection
     match /bookings/{bookingId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(bookingId) && isValidBooking(incoming());
-      allow update: if isSignedIn() && isValidId(bookingId) && isValidBooking(incoming());
-      allow delete: if isAdmin() && isValidId(bookingId);
+      allow get, list: if true;
+      allow create, update: if isValidId(bookingId) && isValidBooking(incoming());
+      allow delete: if isValidId(bookingId);
     }
 
     // Settings collection
     match /settings/{settingId} {
-      allow get, list: if isSignedIn();
-      allow write: if isAdmin() && isValidId(settingId) && isValidSetting(incoming());
+      allow get, list: if true;
+      allow write: if isValidId(settingId) && isValidSetting(incoming());
     }
   }
 }

@@ -29,10 +29,19 @@ export const Header: React.FC = () => {
     isOnline,
     arrivingTodayList,
     departuresTodayList,
-    outstandingPaymentsList
+    outstandingPaymentsList,
+    syncStatus,
+    lastSyncedAt,
+    syncError,
+    isSyncingDatabase,
+    syncDatabase
   } = useBooking();
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+
+  const formattedLastSync = lastSyncedAt 
+    ? new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : 'Just now';
 
   const pendingConcernsCount = 
     arrivingTodayList.length + 
@@ -106,6 +115,58 @@ export const Header: React.FC = () => {
           {/* Right: Currency Segmented Control, Truthful Sync Chip & Primary CTA */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             
+            {/* Live Database Sync Indicator & Manual Sync Button */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => syncDatabase()}
+                disabled={isSyncingDatabase}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                  syncStatus === 'synced'
+                    ? 'bg-[var(--status-success-bg)] text-[var(--status-success-text)] border-[var(--status-success-border)] hover:opacity-90'
+                    : syncStatus === 'syncing'
+                    ? 'bg-[var(--status-warning-bg)] text-[var(--status-warning-text)] border-[var(--status-warning-border)]'
+                    : 'bg-[var(--status-danger-bg)] text-[var(--status-danger-text)] border-[var(--status-danger-border)] hover:opacity-90 animate-pulse'
+                }`}
+                title={
+                  syncStatus === 'synced'
+                    ? `Database synchronized live (Last: ${formattedLastSync}). Click to verify.`
+                    : syncStatus === 'syncing'
+                    ? 'Synchronizing changes with database...'
+                    : `Unsynced changes! Click to synchronize with database (${syncError || 'Pending'})`
+                }
+              >
+                {syncStatus === 'syncing' ? (
+                  <RefreshCw className="w-3 h-3 animate-spin text-[var(--status-warning-text)]" />
+                ) : syncStatus === 'synced' ? (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--status-success-text)] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--status-success-text)]"></span>
+                  </span>
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-[var(--status-danger-text)]" />
+                )}
+
+                <span className="hidden sm:inline">
+                  {syncStatus === 'synced' ? 'Database Synced' : syncStatus === 'syncing' ? 'Syncing...' : 'Unsynced'}
+                </span>
+                <span className="sm:hidden">
+                  {syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing' : 'Unsynced'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => syncDatabase()}
+                disabled={isSyncingDatabase}
+                className="p-1.5 rounded-xl text-secondary hover:text-primary hover:bg-surface-2 transition-colors cursor-pointer border border-subtle disabled:opacity-50"
+                title={`Manually synchronize database now (Last sync: ${formattedLastSync})`}
+                aria-label="Synchronize database"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDatabase ? 'animate-spin text-[var(--primary-gold)]' : ''}`} />
+              </button>
+            </div>
+
             {/* Truthful Google Calendar Sync chip */}
             <button
               type="button"
