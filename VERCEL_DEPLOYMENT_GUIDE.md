@@ -56,6 +56,7 @@ Before clicking Deploy, expand the **"Environment Variables"** section in Vercel
 | :--- | :--- | :--- |
 | `JWT_SECRET` | *(Generate a 32+ character random string)* | Encrypts staff session tokens |
 | `ADMIN_PASSWORD` | `Admin12345` *(or your custom password)* | Master admin login password |
+| `RESEND_API_KEY` | *(Optional, from Resend.com)* | Email OTP delivery for staff login |
 | `NODE_ENV` | `production` | Production mode |
 
 *(Optional)* If you do not commit `firebase-applet-config.json` to GitHub, add these Firebase variables:

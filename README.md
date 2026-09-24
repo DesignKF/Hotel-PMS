@@ -46,10 +46,10 @@ ADMIN_PASSWORD=<a strong initial staff password>
 APP_URL=https://your-domain.example
 ```
 
-Optional email-code delivery:
+Optional email-code delivery (Resend):
 
 ```text
-EMAIL_API_KEY=<SendGrid API key>
+RESEND_API_KEY=<Resend API key>
 ```
 
 Never commit a real `.env` file. The included `.env.example` contains placeholders only.

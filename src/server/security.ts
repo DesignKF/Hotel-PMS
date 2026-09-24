@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { Resend } from 'resend';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'development-only-jwt-secret';
 
@@ -94,38 +95,35 @@ export function getWhatsAppUrl(phone: string, otp: string): string {
 }
 
 /**
- * Mock / SendGrid Email Dispatcher
+ * Resend Email Dispatcher
  */
 export async function sendEmailOtp(email: string, otp: string): Promise<{ success: boolean; message: string }> {
-  const apiKey = process.env.EMAIL_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY || process.env.EMAIL_API_KEY;
   if (apiKey) {
     try {
-      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email }] }],
-          from: { email: 'security@moshiurban.co.tz', name: 'Moshi Urban PMS' },
-          subject: `Your Login Security Code: ${otp}`,
-          content: [{
-            type: 'text/html',
-            value: `<div style="font-family: sans-serif; padding: 20px; color: #1B2C44;">
-              <h2>Moshi Urban Hostel PMS Authentication</h2>
-              <p>Your one-time security login code is:</p>
-              <h1 style="font-size: 32px; letter-spacing: 4px; color: #f8b742;">${otp}</h1>
-              <p>This code expires in 10 minutes and is single-use.</p>
-            </div>`
-          }]
-        })
+      const resend = new Resend(apiKey);
+      const fromAddress = process.env.RESEND_FROM_EMAIL || 'Moshi Urban PMS <onboarding@resend.dev>';
+      const { data, error } = await resend.emails.send({
+        from: fromAddress,
+        to: [email],
+        subject: `Your Login Security Code: ${otp}`,
+        html: `<div style="font-family: sans-serif; padding: 20px; color: #1B2C44;">
+          <h2>Moshi Urban Hostel PMS Authentication</h2>
+          <p>Your one-time security login code is:</p>
+          <h1 style="font-size: 32px; letter-spacing: 4px; color: #f8b742;">${otp}</h1>
+          <p>This code expires in 10 minutes and is single-use.</p>
+        </div>`
       });
-      if (response.ok) {
-        return { success: true, message: `OTP sent via SendGrid to ${email}` };
+
+      if (!error && data?.id) {
+        return { success: true, message: `OTP sent via Resend to ${email}` };
+      }
+
+      if (error) {
+        console.warn('Resend dispatch error, falling back to simulated dispatch:', error);
       }
     } catch (err) {
-      console.warn('SendGrid dispatch error, falling back to simulated dispatch:', err);
+      console.warn('Resend dispatch error, falling back to simulated dispatch:', err);
     }
   }
 
